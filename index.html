@@ -5,70 +5,110 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Ассистент по видео glebprosto</title>
   <style>
-    :root { --bg:#0f1220; --panel:#0e1324; --text:#e9ecf8; --muted:#9aa4c7; --border:#2a3355; --accent:#6ea8ff; }
+    :root {
+      --bg:#0f1220; --panel:#0e1324; --text:#e9ecf8; --muted:#9aa4c7;
+      --border:#2a3355; --accent:#6ea8ff; --accent-ink:#071226;
+    }
     *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,Segoe UI,Roboto,Arial,sans-serif}
-    .wrap{max-width:920px;margin:48px auto;padding:0 16px}
-    h1{margin:0 0 12px;font-size:32px}
-    p.hint{color:var(--muted);margin:0 0 24px}
+    html,body{height:100%}
+    body{
+      margin:0; background:var(--bg); color:var(--text);
+      font:16px/1.5 system-ui,Segoe UI,Roboto,Arial,sans-serif;
+    }
+    .wrap{max-width:1100px;margin:48px auto;padding:0 16px}
+    h1{margin:0 0 10px;font-size:32px}
+    p.hint{margin:0 0 24px;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1fr 1.2fr;gap:16px}
     .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px}
-    textarea{width:100%;min-height:140px;background:var(--panel);color:var(--text);
-             border:1px solid var(--border);border-radius:12px;padding:12px;font:inherit;resize:vertical}
-    .row{display:flex;gap:12px;align-items:center;margin:12px 0 24px}
-    button{background:var(--accent);color:#0a1020;border:0;border-radius:12px;padding:12px 18px;
-           font-weight:700;cursor:pointer}
-    pre{white-space:pre-wrap;background:var(--panel);border:1px solid var(--border);
-        border-radius:12px;padding:12px;min-height:120px;margin:8px 0 0}
-    .footer{margin-top:24px;color:var(--muted);font-size:13px}
+    .card h3{margin:0 0 10px;font-size:16px;color:var(--muted)}
+    textarea{
+      width:100%;min-height:160px;background:var(--panel);color:var(--text);
+      border:1px solid var(--border);border-radius:12px;padding:12px;font:inherit;resize:vertical;
+    }
+    .row{display:flex;gap:12px;align-items:center;margin-top:12px}
+    button{
+      background:var(--accent);color:var(--accent-ink);
+      border:0;border-radius:12px;padding:12px 18px;font-weight:700;cursor:pointer;
+    }
+    button:disabled{opacity:.6;cursor:not-allowed}
+    .muted{color:var(--muted);font-size:13px;margin-top:6px}
+    pre{
+      white-space:pre-wrap;word-wrap:break-word;
+      background:var(--panel);color:var(--text);
+      border:1px solid var(--border);border-radius:12px;padding:12px;
+      min-height:180px;margin:0;
+    }
+    /* Лоадер */
+    .loader{display:inline-flex;align-items:center;gap:10px;font-weight:600;color:var(--muted)}
+    .spinner{width:20px;height:20px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    @media (max-width:880px){ .grid{grid-template-columns:1fr;}}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Ассистент по видео glebprosto</h1>
-    <p class="hint">Введи вопрос и жми Enter/кнопку. Страница обращается к n8n по продовому
-      вебхуку и выводит ответ, который вернёт нода <i>Respond to Webhook</i>.</p>
+    <p class="hint">Пиши вопрос и жми Enter/кнопку. Мы отправим запрос в n8n-вебхук и выведем ответ.</p>
 
-    <div class="card">
-      <textarea id="q" placeholder="Например: Почему Глеб считает фильм «Дурак» плохим?"></textarea>
-      <div class="row">
-        <button id="ask">Спросить</button>
+    <div class="grid">
+      <!-- Ввод -->
+      <div class="card">
+        <h3>Ваш вопрос</h3>
+        <textarea id="q" placeholder="Например: почему Глеб считает фильм «Дурак» плохим?"></textarea>
+        <div class="row">
+          <button id="ask">Спросить</button>
+          <span class="muted">Подсказка: Enter — отправить</span>
+        </div>
       </div>
-      <div>
-        <strong>Ответ</strong>
+
+      <!-- Ответ -->
+      <div class="card">
+        <h3>Ответ</h3>
         <pre id="out">—</pre>
       </div>
     </div>
-
-    <div class="footer">Если ответ не появляется — проверь, что в n8n Webhook → Respond = <b>Using ‘Respond to Webhook’ Node</b>, а в Respond добавлен заголовок <code>Access-Control-Allow-Origin</code>.</div>
   </div>
 
   <script>
-    // Поменяй при необходимости на свой продовый URL (именно /webhook/, не /webhook-test/)
+    // продовый вебхук n8n (именно /webhook/, не /webhook-test/)
     const WEBHOOK_URL = "https://primary-production-7ec55.up.railway.app/webhook/87948bb9-1ee7-4796-b0d4-6428f77bde03";
 
-    const $q = document.getElementById('q');
+    const $q   = document.getElementById('q');
+    const $ask = document.getElementById('ask');
     const $out = document.getElementById('out');
-    document.getElementById('ask').onclick = send;
-    $q.addEventListener('keydown', e => {
+
+    $ask.addEventListener('click', send);
+    $q.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
     });
 
-    async function send(){
+    function showLoading() {
+      $out.innerHTML =
+        '<div class="loader"><div class="spinner"></div><span>Жду ответ…</span></div>';
+    }
+
+    async function send() {
       const text = $q.value.trim();
       if (!text) return;
-      $out.textContent = 'Шлю запрос…';
+      $ask.disabled = true;
+      showLoading();
+
       try {
-        // GET без тела → без префлайта CORS
+        // GET без тела — без preflight CORS
         const url = WEBHOOK_URL + '?chatInput=' + encodeURIComponent(text) + '&t=' + Date.now();
         const res = await fetch(url, { method: 'GET', cache: 'no-store' });
         if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
 
-        // Respond to Webhook должен вернуть JSON { "answer": "..." }
-        const data = await res.json();
-        const answer = data?.answer ?? data?.response ?? (typeof data === 'string' ? data : JSON.stringify(data, null, 2));
-        $out.textContent = answer || 'Пустой ответ.';
-      } catch (e) {
-        $out.textContent = 'Ошибка: ' + e.message + '\nПроверь Respond-заголовки и что воркфлоу активен.';
+        const data = await res.json().catch(() => ({}));
+        const answer =
+          data?.answer ?? data?.response ?? (typeof data === 'string' ? data : JSON.stringify(data, null, 2));
+
+        $out.textContent = answer || 'Пустой ответ от сервера.';
+      } catch (err) {
+        $out.textContent = 'Ошибка: ' + (err?.message || err);
+      } finally {
+        $ask.disabled = false;
       }
     }
   </script>
