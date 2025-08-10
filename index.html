@@ -12,13 +12,15 @@
 </style>
 <div class="wrap">
   <h1>Ассистент по видео glebprosto</h1>
-  <p style="opacity:.8">Задай вопрос (пример: «Почему Глеб считает фильм “Дурак” плохим?»)</p>
-  <textarea id="q"></textarea>
+  <p style="opacity:.8">Введи вопрос и жми Enter/кнопку. Для первого шага нам важно лишь,
+  чтобы <b>в n8n появился Execution</b>.</p>
+  <textarea id="q" placeholder="Почему Глеб считает фильм «Дурак» плохим?"></textarea>
   <button id="ask">Спросить</button>
-  <h3>Ответ</h3>
+  <h3>Статус</h3>
   <pre id="out">—</pre>
 </div>
 <script>
+  // ТВОЙ ПРОДОВЫЙ ВЕБХУК (НЕ /webhook-test/)
   const WEBHOOK_URL = "https://primary-production-7ec55.up.railway.app/webhook/87948bb9-1ee7-4796-b0d4-6428f77bde03";
 
   const $q = document.getElementById('q');
@@ -26,19 +28,26 @@
   document.getElementById('ask').onclick = send;
   $q.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }});
 
-  async function send() {
+  async function send(){
     const text = $q.value.trim();
-    if (!text) return;
-    $out.textContent = 'Думаю…';
+    if(!text) return;
+    const url = WEBHOOK_URL + "?chatInput=" + encodeURIComponent(text) + "&t=" + Date.now();
+    $out.textContent = "Шлю GET…";
+
+    // Пытаемся обычным fetch (если сервер вернёт CORS — прочитаем ответ)
     try {
-      const url = WEBHOOK_URL + "?chatInput=" + encodeURIComponent(text); // GET — без префлайта/CORS
-      const res = await fetch(url, { method: 'GET' });
-      if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
-      const data = await res.json().catch(() => ({}));
-      const answer = data.answer || data.response || (typeof data === 'string' ? data : JSON.stringify(data, null, 2));
-      $out.textContent = answer || 'Пустой ответ.';
+      const res = await fetch(url, { method: "GET", cache: "no-store" });
+      // Если ответ не ок — бросим в catch, чтобы сработал пиксель-фоллбек
+      if (!res.ok) throw new Error(res.status + " " + res.statusText);
+      // Некоторые конфиги не дают читать body — тоже пойдём в catch
+      const data = await res.json().catch(() => null);
+      $out.textContent = data ? "Отправлено. Ответ получен." : "Отправлено. Ответ прочитать нельзя — это норм для первого шага.";
     } catch (e) {
-      $out.textContent = 'Ошибка: ' + e.message + '\nПроверь активность воркфлоу и URL.';
+      // Фоллбек без CORS: всё равно пошлёт запрос, Execution появится в n8n
+      const img = new Image();
+      img.onload = () => { $out.textContent = "Отправлено (fallback). Проверь Executions в n8n."; };
+      img.onerror = () => { $out.textContent = "Отправлено (fallback). Если Executions нет — проверь, что workflow Active и метод GET."; };
+      img.src = url + "&pixel=1";
     }
   }
 </script>
