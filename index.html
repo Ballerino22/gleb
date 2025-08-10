@@ -1,54 +1,156 @@
 <!doctype html>
 <html lang="ru">
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>glebprosto RAG</title>
-<style>
-  body{font:16px/1.5 system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#0f1220;color:#e9ecf8}
-  .wrap{max-width:800px;margin:40px auto;padding:0 16px}
-  textarea{width:100%;min-height:110px;padding:12px;border-radius:10px;border:1px solid #2a3355;background:#0e1324;color:#e9ecf8}
-  button{margin-top:10px;padding:12px 16px;border:0;border-radius:10px;cursor:pointer;background:#6ea8ff;color:#0a1020;font-weight:600}
-  pre{white-space:pre-wrap;background:#0e1324;border:1px solid #2a3355;border-radius:10px;padding:12px;min-height:100px}
-</style>
-<div class="wrap">
-  <h1>Ассистент по видео glebprosto</h1>
-  <p style="opacity:.8">Введи вопрос и жми Enter/кнопку. Для первого шага нам важно лишь,
-  чтобы <b>в n8n появился Execution</b>.</p>
-  <textarea id="q" placeholder="Почему Глеб считает фильм «Дурак» плохим?"></textarea>
-  <button id="ask">Спросить</button>
-  <h3>Статус</h3>
-  <pre id="out">—</pre>
-</div>
-<script>
-  // ТВОЙ ПРОДОВЫЙ ВЕБХУК (НЕ /webhook-test/)
-  const WEBHOOK_URL = "https://primary-production-7ec55.up.railway.app/webhook/87948bb9-1ee7-4796-b0d4-6428f77bde03";
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Glebprosto RAG — мини‑приложение</title>
+  <style>
+    :root{--bg:#0f1220;--card:#171a2b;--text:#e9ecf8;--muted:#a5acd1;--accent:#6ea8ff;--accent2:#9b7cff}
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(160deg,var(--bg),#12152a 40%,#101a2a);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    .wrap{max-width:900px;margin:0 auto;padding:28px}
+    .hero{padding:22px 22px 8px;border-radius:20px;background:linear-gradient(135deg,rgba(110,168,255,.15),rgba(155,124,255,.12));border:1px solid rgba(255,255,255,.08)}
+    h1{margin:0 0 6px;font-size:24px}
+    .hint{color:var(--muted);font-size:14px}
+    .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;margin-top:18px}
+    .card{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px}
+    textarea{width:100%;min-height:120px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:#0e1324;color:var(--text);padding:12px;font-size:15px;resize:vertical}
+    .row{display:flex;gap:10px;align-items:center;margin-top:10px}
+    button{appearance:none;border:0;border-radius:12px;padding:12px 16px;font-weight:600;cursor:pointer;color:#0a1020;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 8px 24px rgba(110,168,255,.25);}
+    button[disabled]{opacity:.6;cursor:not-allowed}
+    .muted{color:var(--muted);font-size:13px;margin-top:8px}
+    .out{white-space:pre-wrap;background:#0e1324;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px;min-height:120px}
+    .src{font-size:14px;margin-top:10px}
+    .src ul{margin:6px 0 0 18px}
+    .badge{display:inline-block;font-size:12px;padding:4px 8px;border:1px solid rgba(255,255,255,.12);border-radius:999px;margin-right:6px;color:var(--muted)}
+    .footer{margin-top:18px;color:var(--muted);font-size:12px;text-align:center}
+    @media (max-width: 860px){.grid{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>Ассистент по видео glebprosto</h1>
+      <div class="hint">Простое приложение с GET запросами к n8n webhook. Пишите вопрос и жмите Enter.
+      </div>
+    </div>
 
-  const $q = document.getElementById('q');
-  const $out = document.getElementById('out');
-  document.getElementById('ask').onclick = send;
-  $q.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }});
+    <div class="grid">
+      <div class="card">
+        <div class="badge">GET метод</div>
+        <div class="badge">URL параметры</div>
+        <label class="muted">Ваш вопрос:</label>
+        <textarea id="q" placeholder="Почему Глеб считает фильм «Дурак» плохим?"></textarea>
+        <div class="row">
+          <button id="ask">Спросить</button>
+          <button id="copy" title="Скопировать ответ" style="background:#232949;color:#cbd3ff">Копировать</button>
+        </div>
+        <div class="muted">Подсказка: Enter — отправить вопрос.</div>
+      </div>
 
-  async function send(){
-    const text = $q.value.trim();
-    if(!text) return;
-    const url = WEBHOOK_URL + "?chatInput=" + encodeURIComponent(text) + "&t=" + Date.now();
-    $out.textContent = "Шлю GET…";
+      <div class="card">
+        <div class="badge">Ответ</div>
+        <div id="out" class="out">Напишите вопрос и нажмите "Спросить"</div>
+        <div id="debug" class="muted" style="margin-top:10px;font-size:12px;"></div>
+      </div>
+    </div>
 
-    // Пытаемся обычным fetch (если сервер вернёт CORS — прочитаем ответ)
-    try {
-      const res = await fetch(url, { method: "GET", cache: "no-store" });
-      // Если ответ не ок — бросим в catch, чтобы сработал пиксель-фоллбек
-      if (!res.ok) throw new Error(res.status + " " + res.statusText);
-      // Некоторые конфиги не дают читать body — тоже пойдём в catch
-      const data = await res.json().catch(() => null);
-      $out.textContent = data ? "Отправлено. Ответ получен." : "Отправлено. Ответ прочитать нельзя — это норм для первого шага.";
-    } catch (e) {
-      // Фоллбек без CORS: всё равно пошлёт запрос, Execution появится в n8n
-      const img = new Image();
-      img.onload = () => { $out.textContent = "Отправлено (fallback). Проверь Executions в n8n."; };
-      img.onerror = () => { $out.textContent = "Отправлено (fallback). Если Executions нет — проверь, что workflow Active и метод GET."; };
-      img.src = url + "&pixel=1";
+    <div class="footer">GET запросы к n8n webhook с параметрами в URL
+    </div>
+  </div>
+
+  <script>
+    // Ваш webhook URL - настройте его на GET метод в n8n
+    const WEBHOOK_URL = "https://primary-production-7ec55.up.railway.app/webhook/87948bb9-1ee7-4796-b0d4-6428f77bde03";
+
+    const $q = document.getElementById('q');
+    const $ask = document.getElementById('ask');
+    const $copy = document.getElementById('copy');
+    const $out = document.getElementById('out');
+    const $debug = document.getElementById('debug');
+
+    function setLoading(on) { 
+      $ask.disabled = !!on; 
+      $ask.textContent = on ? 'Думаю…' : 'Спросить'; 
     }
-  }
-</script>
+
+    async function ask() {
+      const text = $q.value.trim();
+      if (!text) {
+        $out.textContent = 'Введите вопрос!';
+        return;
+      }
+
+      setLoading(true);
+      $out.textContent = 'Отправляю запрос...';
+      $debug.textContent = '';
+
+      try {
+        // Создаем URL с GET параметрами
+        const url = new URL(WEBHOOK_URL);
+        url.searchParams.set('chatInput', text);
+        url.searchParams.set('q', text); // дублируем на всякий случай
+        
+        $debug.textContent = `Запрос: ${url.toString()}`;
+        
+        console.log('Отправляю GET запрос:', url.toString());
+
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json,text/plain,*/*'
+          }
+        });
+
+        console.log('Статус:', response.status);
+        console.log('Заголовки:', [...response.headers.entries()]);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`${response.status}: ${errorText}`);
+        }
+
+        // Получаем ответ как текст (так как n8n возвращает Text)
+        const result = await response.text();
+        console.log('Ответ от n8n:', result);
+        
+        // Если ответ выглядит как JSON, парсим его
+        try {
+          const jsonData = JSON.parse(result);
+          const answer = jsonData.answer || jsonData.output || jsonData.response || result;
+          $out.textContent = answer;
+        } catch {
+          // Если не JSON, показываем как есть
+          $out.textContent = result || 'Пустой ответ от сервера';
+        }
+
+      } catch (error) {
+        console.error('Ошибка:', error);
+        $out.textContent = `Ошибка: ${error.message}`;
+        $debug.textContent = `Ошибка: ${error.message}`;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // Обработчики событий
+    $ask.addEventListener('click', ask);
+    
+    $q.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { 
+        e.preventDefault(); 
+        ask(); 
+      }
+    });
+    
+    $copy.addEventListener('click', () => {
+      const txt = $out.textContent.trim();
+      if (!txt || txt === '—') return;
+      navigator.clipboard.writeText(txt).then(() => {
+        $copy.textContent = 'Скопировано'; 
+        setTimeout(() => { $copy.textContent = 'Копировать' }, 1200);
+      });
+    });
+  </script>
+</body>
 </html>
