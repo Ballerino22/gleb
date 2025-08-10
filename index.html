@@ -1,132 +1,45 @@
 <!doctype html>
 <html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Glebprosto RAG — мини‑приложение</title>
-  <style>
-    :root{--bg:#0f1220;--card:#171a2b;--text:#e9ecf8;--muted:#a5acd1;--accent:#6ea8ff;--accent2:#9b7cff}
-    *{box-sizing:border-box}
-    body{margin:0;background:linear-gradient(160deg,var(--bg),#12152a 40%,#101a2a);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
-    .wrap{max-width:900px;margin:0 auto;padding:28px}
-    .hero{padding:22px 22px 8px;border-radius:20px;background:linear-gradient(135deg,rgba(110,168,255,.15),rgba(155,124,255,.12));border:1px solid rgba(255,255,255,.08)}
-    h1{margin:0 0 6px;font-size:24px}
-    .hint{color:var(--muted);font-size:14px}
-    .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;margin-top:18px}
-    .card{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px}
-    textarea{width:100%;min-height:120px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:#0e1324;color:var(--text);padding:12px;font-size:15px;resize:vertical}
-    .row{display:flex;gap:10px;align-items:center;margin-top:10px}
-    button{appearance:none;border:0;border-radius:12px;padding:12px 16px;font-weight:600;cursor:pointer;color:#0a1020;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 8px 24px rgba(110,168,255,.25);}
-    button[disabled]{opacity:.6;cursor:not-allowed}
-    .muted{color:var(--muted);font-size:13px;margin-top:8px}
-    .out{white-space:pre-wrap;background:#0e1324;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px;min-height:120px}
-    .src{font-size:14px;margin-top:10px}
-    .src ul{margin:6px 0 0 18px}
-    .badge{display:inline-block;font-size:12px;padding:4px 8px;border:1px solid rgba(255,255,255,.12);border-radius:999px;margin-right:6px;color:var(--muted)}
-    .footer{margin-top:18px;color:var(--muted);font-size:12px;text-align:center}
-    @media (max-width: 860px){.grid{grid-template-columns:1fr;}}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="hero">
-      <h1>Ассистент по видео glebprosto</h1>
-      <div class="hint">Этот бот ищет ответы в <b>векторном хранилище</b> с расшифровками видео канала <i>@glebprosto</i> и:
-        <ul>
-          <li>сначала делает поиск по базе (эмбеддинги) и берёт релевантные фрагменты,</li>
-          <li>отвечает, цитируя источник (название/таймкоды),</li>
-          <li>если в базе нет подходящего — честно сообщает, что не нашёл.</li>
-        </ul>
-      </div>
-    </div>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>glebprosto RAG</title>
+<style>
+  body{font:16px/1.5 system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#0f1220;color:#e9ecf8}
+  .wrap{max-width:800px;margin:40px auto;padding:0 16px}
+  textarea{width:100%;min-height:110px;padding:12px;border-radius:10px;border:1px solid #2a3355;background:#0e1324;color:#e9ecf8}
+  button{margin-top:10px;padding:12px 16px;border:0;border-radius:10px;cursor:pointer;background:#6ea8ff;color:#0a1020;font-weight:600}
+  pre{white-space:pre-wrap;background:#0e1324;border:1px solid #2a3355;border-radius:10px;padding:12px;min-height:100px}
+</style>
+<div class="wrap">
+  <h1>Ассистент по видео glebprosto</h1>
+  <p style="opacity:.8">Задай вопрос (пример: «Почему Глеб считает фильм “Дурак” плохим?»)</p>
+  <textarea id="q"></textarea>
+  <button id="ask">Спросить</button>
+  <h3>Ответ</h3>
+  <pre id="out">—</pre>
+</div>
+<script>
+  const WEBHOOK_URL = "https://primary-production-7ec55.up.railway.app/webhook/87948bb9-1ee7-4796-b0d4-6428f77bde03";
 
-    <div class="grid">
-      <div class="card">
-        <div class="badge">RAG • Supabase</div>
-        <div class="badge">OpenAI embeddings 3‑small</div>
-        <label class="muted">Ваш вопрос:</label>
-        <textarea id="q" placeholder="Например: Почему Глеб считает фильм «Дурак» плохим?"></textarea>
-        <div class="row">
-          <button id="ask">Спросить</button>
-          <button id="copy" title="Скопировать ответ" style="background:#232949;color:#cbd3ff">Копировать</button>
-        </div>
-        <div class="muted">Подсказка: Shift+Enter — новая строка, Enter — отправить.</div>
-      </div>
+  const $q = document.getElementById('q');
+  const $out = document.getElementById('out');
+  document.getElementById('ask').onclick = send;
+  $q.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }});
 
-      <div class="card">
-        <div class="badge">Ответ</div>
-        <div id="out" class="out">—</div>
-        <div id="sources" class="src"></div>
-      </div>
-    </div>
-
-    <div class="footer">Задеплой на GitHub Pages. Настрой в коде URL своего n8n‑вебхука.
-    </div>
-  </div>
-
-  <script>
-    // 1) Вставь сюда свой URL.
-    // Важно: n8n Webhook должен принимать POST и возвращать JSON с полем { answer } (или { response }).
-    // Пример: https://your-n8n.example.com/webhook/87948bb9-1ee7-4796-b0d4-6428f77bde03?token=YOUR_SECRET
-    const WEBHOOK_URL = "https://primary-production-7ec55.up.railway.app/webhook/87948bb9-1ee7-4796-b0d4-6428f77bde03";
-
-    const $q = document.getElementById('q');
-    const $ask = document.getElementById('ask');
-    const $copy = document.getElementById('copy');
-    const $out = document.getElementById('out');
-    const $src = document.getElementById('sources');
-
-    function setLoading(on){ $ask.disabled = !!on; $ask.textContent = on ? 'Думаю…' : 'Спросить'; }
-
-    async function ask(){
-      const text = $q.value.trim();
-      if(!text) return;
-      setLoading(true); $out.textContent = 'Думаю…'; $src.innerHTML='';
-      try{
-        const res = await fetch(WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chatInput: text })
-        });
-        if(!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-        const data = await res.json().catch(()=>({}));
-        const answer = data.answer || data.response || (typeof data === 'string' ? data : JSON.stringify(data, null, 2));
-        $out.textContent = answer || 'Пустой ответ.';
-
-        // Попробуем красиво отобразить источники, если пришли.
-        const sources = data.sources || data.refs || [];
-        if(Array.isArray(sources) && sources.length){
-          const items = sources.map(s => {
-            if(typeof s === 'string') return `<li>${escapeHtml(s)}</li>`;
-            const title = s.title || s.name || 'Источник';
-            const t1 = s.ts_from || s.t_from || s.start || '';
-            const t2 = s.ts_to || s.t_to || s.end || '';
-            const link = s.url || s.href || '';
-            const time = (t1||t2) ? ` (t=${t1}${t2?`–${t2}`:''})` : '';
-            return `<li>${link?`<a href="${link}" target="_blank" rel="noopener">${escapeHtml(title)}</a>`:escapeHtml(title)}${time}</li>`;
-          }).join('');
-          $src.innerHTML = `<div class="badge">Источники</div><ul>${items}</ul>`;
-        }
-      }catch(err){
-        $out.textContent = 'Ошибка: '+ err.message + '\n\nПроверь URL вебхука и CORS.';
-      }finally{
-        setLoading(false);
-      }
+  async function send() {
+    const text = $q.value.trim();
+    if (!text) return;
+    $out.textContent = 'Думаю…';
+    try {
+      const url = WEBHOOK_URL + "?chatInput=" + encodeURIComponent(text); // GET — без префлайта/CORS
+      const res = await fetch(url, { method: 'GET' });
+      if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+      const data = await res.json().catch(() => ({}));
+      const answer = data.answer || data.response || (typeof data === 'string' ? data : JSON.stringify(data, null, 2));
+      $out.textContent = answer || 'Пустой ответ.';
+    } catch (e) {
+      $out.textContent = 'Ошибка: ' + e.message + '\nПроверь активность воркфлоу и URL.';
     }
-
-    function escapeHtml(str){
-      return String(str).replace(/[&<>"] /g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',' ':'&nbsp;'}[s]));
-    }
-
-    $ask.addEventListener('click', ask);
-    $q.addEventListener('keydown', (e)=>{
-      if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); ask(); }
-    });
-    $copy.addEventListener('click', ()=>{
-      const txt = $out.textContent.trim();
-      if(!txt || txt==='—') return;
-      navigator.clipboard.writeText(txt).then(()=>{$copy.textContent='Скопировано'; setTimeout(()=>{$copy.textContent='Копировать'},1200)});
-    });
-  </script>
-</body>
+  }
+</script>
 </html>
